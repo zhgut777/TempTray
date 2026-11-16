@@ -1,0 +1,135 @@
+<Window x:Class="TempTray.FlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TempTray" Width="340" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        WindowStartupLocation="Manual" Left="-10000" Top="-10000"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
+        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="14" UseLayoutRounding="True">
+    <StackPanel Margin="16,16,16,10">
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="&#xE950;" FontFamily="{StaticResource Icons}" FontSize="26" VerticalAlignment="Center"
+                       Margin="0,0,12,0" Foreground="{DynamicResource TextSecondary}"/>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="Процессор" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock x:Name="TempText" Text="— °C" FontSize="26" FontWeight="SemiBold"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                <TextBlock x:Name="MinText" FontSize="12" HorizontalAlignment="Right" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock x:Name="MaxText" FontSize="12" HorizontalAlignment="Right" Margin="0,2,0,0" Foreground="{DynamicResource TextSecondary}"/>
+            </StackPanel>
+        </Grid>
+
+        <Border x:Name="BarTrack" Height="4" CornerRadius="2" Margin="0,12,0,0" Background="{DynamicResource Track}">
+            <Border x:Name="TempBar" Height="4" CornerRadius="2" Width="0" HorizontalAlignment="Left"/>
+        </Border>
+
+        <Border x:Name="NoticeBox" Visibility="Collapsed" CornerRadius="6" Padding="10,8" Margin="0,12,0,0"
+                Background="{DynamicResource Track}">
+            <StackPanel>
+                <TextBlock x:Name="NoticeText" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
+                <Button x:Name="CopyCommand" Style="{StaticResource Flat}" Content="Скопировать команду"
+                        Foreground="{DynamicResource AccentText}" HorizontalAlignment="Left" Margin="-8,4,0,-4"
+                        Click="CopyCommand_Click"/>
+            </StackPanel>
+        </Border>
+
+        <StackPanel x:Name="PlansSection">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Схема электропитания"/>
+            <StackPanel x:Name="PlansPanel"/>
+        </StackPanel>
+
+        <StackPanel x:Name="HonorSection" Visibility="Collapsed">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Профиль Honor"/>
+            <RadioButton x:Name="HonorBalanced" Style="{StaticResource RowRadio}" GroupName="Honor" Tag="&#xEC49;"
+                         Content="Сбалансированный" Checked="Honor_Checked"/>
+            <RadioButton x:Name="HonorPerformance" Style="{StaticResource RowRadio}" GroupName="Honor" Tag="&#xE945;"
+                         Content="Производительный" Checked="Honor_Checked"/>
+            <TextBlock x:Name="HonorHint" Visibility="Collapsed" FontSize="12" TextWrapping="Wrap" Margin="10,6,10,0"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Text="Производительный профиль доступен при питании от сети и заряде от 20 %."/>
+        </StackPanel>
+
+        <StackPanel x:Name="ChargeSection" Visibility="Collapsed">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Защита батареи"/>
+            <Border CornerRadius="7" Padding="3" Background="{DynamicResource Track}">
+                <UniformGrid Rows="1">
+                    <RadioButton x:Name="ChargeOff" Style="{StaticResource Seg}" GroupName="Charge" Content="Выкл." Checked="Charge_Checked"/>
+                    <RadioButton x:Name="ChargeHome" Style="{StaticResource Seg}" GroupName="Charge" Content="70 %" Checked="Charge_Checked"/>
+                    <RadioButton x:Name="ChargeOffice" Style="{StaticResource Seg}" GroupName="Charge" Content="90 %" Checked="Charge_Checked"/>
+                    <RadioButton x:Name="ChargeTravel" Style="{StaticResource Seg}" GroupName="Charge" Content="100 %" Checked="Charge_Checked"/>
+                </UniformGrid>
+            </Border>
+            <TextBlock x:Name="ChargeHint" FontSize="12" TextWrapping="Wrap" Margin="2,8,0,0"
+                       Foreground="{DynamicResource TextSecondary}"/>
+        </StackPanel>
+
+        <StackPanel x:Name="ModeSection">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Режим питания"/>
+            <RadioButton x:Name="ModeEfficiency" Style="{StaticResource RowRadio}" GroupName="Mode" Tag="&#xE8BE;"
+                         Content="Наилучшая энергоэффективность" Checked="Mode_Checked"/>
+            <RadioButton x:Name="ModeBalanced" Style="{StaticResource RowRadio}" GroupName="Mode" Tag="&#xEC49;"
+                         Content="Сбалансированный" Checked="Mode_Checked"/>
+            <RadioButton x:Name="ModePerformance" Style="{StaticResource RowRadio}" GroupName="Mode" Tag="&#xE945;"
+                         Content="Наилучшая производительность" Checked="Mode_Checked"/>
+        </StackPanel>
+
+        <StackPanel x:Name="HzSection">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Частота экрана"/>
+            <Border CornerRadius="7" Padding="3" Background="{DynamicResource Track}">
+                <UniformGrid x:Name="HzPanel" Rows="1"/>
+            </Border>
+        </StackPanel>
+
+        <Border Style="{StaticResource Line}"/>
+        <Grid>
+            <TextBlock Style="{StaticResource Section}" Text="Таймеры" VerticalAlignment="Center" Margin="0"/>
+            <Border CornerRadius="7" Padding="3" Width="190" HorizontalAlignment="Right" Background="{DynamicResource Track}">
+                <UniformGrid Rows="1">
+                    <RadioButton x:Name="SourceAc" Style="{StaticResource Seg}" GroupName="Source" Content="От сети" Checked="Source_Checked"/>
+                    <RadioButton x:Name="SourceDc" Style="{StaticResource Seg}" GroupName="Source" Content="От батареи" Checked="Source_Checked"/>
+                </UniformGrid>
+            </Border>
+        </Grid>
+
+        <Grid Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center"
+                           Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="Отключать дисплей" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ComboBox x:Name="DisplayTimeout" Width="124" HorizontalAlignment="Right" SelectionChanged="Timeout_Changed"/>
+        </Grid>
+
+        <Grid Margin="0,8,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center"
+                           Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="Спящий режим" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ComboBox x:Name="SleepTimeout" Width="124" HorizontalAlignment="Right" SelectionChanged="Timeout_Changed"/>
+        </Grid>
+
+        <Border Style="{StaticResource Line}" Margin="0,14,0,8"/>
+        <Grid>
+            <CheckBox x:Name="AutostartBox" Content="Запускать с Windows" VerticalAlignment="Center" Click="Autostart_Click"/>
+            <Button Style="{StaticResource Flat}" HorizontalAlignment="Right" Margin="0,0,-8,0" Click="Exit_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="Выход" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+    </StackPanel>
+</Window>
