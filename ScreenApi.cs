@@ -43,6 +43,7 @@ internal static unsafe class ScreenApi
 {
     public static readonly ColorMode[] Modes =
     {
+        new(NativeIndex, "Родной (панель без коррекции)", "HonorNative"),
         new(0, "Интернет и офис (sRGB)", "Internet_and_Web"),
         new(1, "Фотография (P3)", "Photography"),
         new(2, "Цифровое кино (P3-D65)", "Digital_Cinema_P3-D65"),
@@ -56,6 +57,12 @@ internal static unsafe class ScreenApi
         new(10, "Игровой", "Game_Pro"),
         new(11, "MagicP3", "MagicP3"),
     };
+
+    /// <summary>
+    /// «Родной» режим: у Honor для него нет файла калибровки (в BasicDisplay.xml нулевая гамма), только ICC HonorNative —
+    /// то есть панель без цветокоррекции. Для драйвера это единичная 3D-таблица.
+    /// </summary>
+    public const int NativeIndex = -1;
 
     private const string Dll = "ControlLib.dll";
     private const string ManagerKey = @"SOFTWARE\HONOR\PCManager\LCDEnhancement";
@@ -374,7 +381,7 @@ internal static unsafe class ScreenApi
     // ---------- цветовые режимы ----------
 
     /// <summary>Режимы, для которых на этом ноутбуке есть файл калибровки.</summary>
-    public static IReadOnlyList<ColorMode> AvailableModes() => Modes.Where(m => CalibrationFile(m.Index) != null).ToList();
+    public static IReadOnlyList<ColorMode> AvailableModes() => Modes.Where(m => m.Index == NativeIndex || CalibrationFile(m.Index) != null).ToList();
 
     private static string? CalibrationFile(int index)
     {
@@ -396,7 +403,11 @@ internal static unsafe class ScreenApi
         try
         {
             using RegistryKey? key = Registry.LocalMachine.OpenSubKey(ManagerKey);
-            return key != null && ReadInt(key, "ColorMode") is int index ? Modes.FirstOrDefault(m => m.Index == index) : null;
+            if (key == null)
+                return null;
+            if (string.Equals(key.GetValue("ColorMode") as string, NativeName, StringComparison.OrdinalIgnoreCase))
+                return Modes.First(m => m.Index == NativeIndex);
+            return ReadInt(key, "ColorMode") is int index ? Modes.FirstOrDefault(m => m.Index == index) : null;
         }
         catch
         {
@@ -415,7 +426,7 @@ internal static unsafe class ScreenApi
                 return false;
             // ICC нужен программам, которые сами пересчитывают цвета под профиль экрана; сбой здесь таблицу не отменяет
             ApplyIcc(mode.Icc);
-            bool stored = WriteManager(key => key.SetValue("ColorMode", mode.Index.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String));
+            bool stored = WriteManager(key => key.SetValue("ColorMode", mode.Index == NativeIndex ? NativeName : mode.Index.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String));
             _modeOverride = stored ? null : mode.Index;
             return true;
         }
@@ -432,8 +443,30 @@ internal static unsafe class ScreenApi
         return lut;
     }
 
+    // В реестре PC Manager «родной» режим назван так же, как в списке StandardColorSpace
+    private const string NativeName = "Native";
+
+    // Порядок как в файлах калибровки: красный — самая медленная ось, синий — самая быстрая
+    private static double[] IdentityLut()
+    {
+        int n = (int)Lut3Samples;
+        var lut = new double[n * n * n * 3];
+        int k = 0;
+        for (int r = 0; r < n; r++)
+            for (int g = 0; g < n; g++)
+                for (int b = 0; b < n; b++)
+                {
+                    lut[k++] = r / (n - 1.0);
+                    lut[k++] = g / (n - 1.0);
+                    lut[k++] = b / (n - 1.0);
+                }
+        return lut;
+    }
+
     private static double[]? ParseCalibration(int index)
     {
+        if (index == NativeIndex)
+            return IdentityLut();
         string? path = CalibrationFile(index);
         if (path == null)
             return null;
