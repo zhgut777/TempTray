@@ -108,7 +108,8 @@ internal static class HonorApi
             ChargeLog.Write($"выбрано в программе: «{preset.Name}» ({preset.Resume}–{preset.Stop} %)");
             try
             {
-                using RegistryKey? key = Registry.LocalMachine.OpenSubKey(ManagerPowerKey, writable: true);
+                // Раздел создаём, если его нет: без PC Manager он не появится сам, а сторожу нужен выбранный вариант
+                using RegistryKey? key = Registry.LocalMachine.CreateSubKey(ManagerPowerKey, writable: true);
                 if (key != null)
                 {
                     key.SetValue("PowerSafeManagerStatus", preset.Protection ? 1 : 0, RegistryValueKind.DWord);

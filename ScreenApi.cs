@@ -682,12 +682,13 @@ internal static unsafe class ScreenApi
 
     // ---------- реестр PC Manager: все значения там строки ----------
 
-    /// <summary>Записывает выбор туда, где его хранит PC Manager. False — нет прав администратора или раздела.</summary>
+    /// <summary>Записывает выбор туда, где его хранит PC Manager. False — нет прав администратора.</summary>
     private static bool WriteManager(Action<RegistryKey> write)
     {
         try
         {
-            using RegistryKey? key = Registry.LocalMachine.OpenSubKey(ManagerKey, writable: true);
+            // Раздел создаём, если его нет: без PC Manager он не появится сам
+            using RegistryKey? key = Registry.LocalMachine.CreateSubKey(ManagerKey, writable: true);
             if (key == null)
                 return false;
             write(key);

@@ -349,11 +349,22 @@ public partial class App : Application
         // Пороги зарядки проверяем сразу: после сна прошивка могла их сбросить, а при подключении зарядки они и нужны
         if (e.Mode != PowerModes.Suspend)
             CheckChargeNow(afterSleep: e.Mode == PowerModes.Resume);
-        Dispatcher.InvokeAsync(() =>
-        {
-            if (e.Mode == PowerModes.StatusChange && _flyout?.IsVisible == true)
-                _flyout.RefreshState();
-        });
+        if (e.Mode == PowerModes.StatusChange)
+            Task.Run(ResetHonorPerformanceIfNotAllowed).ContinueWith(_ => Dispatcher.InvokeAsync(() =>
+            {
+                if (_flyout?.IsVisible == true)
+                    _flyout.RefreshState();
+            }));
+    }
+
+    /// <summary>
+    /// Производительный профиль Honor разрешён только от сети и при заряде от 20 %. PC Manager сбрасывает его сам,
+    /// но только если профиль включал он; для профиля, включённого из TempTray, сбрасываем здесь.
+    /// </summary>
+    private static void ResetHonorPerformanceIfNotAllowed()
+    {
+        if (HonorApi.Available && !HonorApi.PerformanceAllowed && HonorApi.GetMode() == HonorApi.Performance)
+            HonorApi.SetMode(HonorApi.Balanced);
     }
 
     private void ApplyTheme()
