@@ -73,6 +73,23 @@
                        Foreground="{DynamicResource TextSecondary}"/>
         </StackPanel>
 
+        <StackPanel x:Name="ScreenSection" Visibility="Collapsed">
+            <Border Style="{StaticResource Line}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Защита зрения"/>
+            <Border CornerRadius="7" Padding="3" Background="{DynamicResource Track}">
+                <UniformGrid Rows="1">
+                    <RadioButton x:Name="EyeOff" Style="{StaticResource Seg}" GroupName="Eye" Content="Выкл." Checked="Eye_Checked"/>
+                    <RadioButton x:Name="EyeCold" Style="{StaticResource Seg}" GroupName="Eye" Content="Холоднее" Checked="Eye_Checked"/>
+                    <RadioButton x:Name="EyeStandard" Style="{StaticResource Seg}" GroupName="Eye" Content="Стандарт" Checked="Eye_Checked"/>
+                    <RadioButton x:Name="EyeWarm" Style="{StaticResource Seg}" GroupName="Eye" Content="Теплее" Checked="Eye_Checked"/>
+                </UniformGrid>
+            </Border>
+            <TextBlock x:Name="EyeHint" FontSize="12" TextWrapping="Wrap" Margin="2,8,0,0"
+                       Foreground="{DynamicResource TextSecondary}"/>
+            <TextBlock Style="{StaticResource Section}" Text="Цветовой режим" Margin="0,14,0,6"/>
+            <ComboBox x:Name="ColorModeBox" SelectionChanged="ColorMode_Changed"/>
+        </StackPanel>
+
         <StackPanel x:Name="ModeSection">
             <Border Style="{StaticResource Line}"/>
             <TextBlock Style="{StaticResource Section}" Text="Режим питания"/>

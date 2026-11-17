@@ -156,6 +156,7 @@ public partial class FlyoutWindow : Window
             LoadPlans();
             LoadHonor();
             LoadCharge();
+            LoadScreen();
             LoadMode();
             LoadRefreshRates();
             SourceAc.IsChecked = !_battery;
@@ -241,6 +242,52 @@ public partial class FlyoutWindow : Window
             : ChargePreset.Off;
         HonorApi.SetChargePreset(preset);
         Reload(LoadCharge);
+    }
+
+    private void LoadScreen()
+    {
+        bool available = ScreenApi.Available;
+        ScreenSection.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+        if (!available)
+            return;
+
+        double? blue = ScreenApi.GetBlueGain();
+        EyePreset? preset = blue.HasValue ? EyePreset.Find(blue.Value) : null;
+        EyeOff.IsChecked = preset == EyePreset.Off;
+        EyeCold.IsChecked = preset == EyePreset.Cold;
+        EyeStandard.IsChecked = preset == EyePreset.Standard;
+        EyeWarm.IsChecked = preset == EyePreset.Warm;
+        // Усиление, заданное не через PC Manager и не нами, показываем как есть
+        EyeHint.Text = preset?.Hint ?? (blue.HasValue ? $"Синий канал ослаблен до {Math.Round(blue.Value * 100)} %." : "");
+
+        IReadOnlyList<ColorMode> modes = ScreenApi.AvailableModes();
+        ColorModeBox.ItemsSource = modes;
+        ColorMode? stored = ScreenApi.GetStoredMode();
+        ColorModeBox.SelectedItem = modes.FirstOrDefault(m => m.Index == stored?.Index);
+        ColorModeBox.IsEnabled = modes.Count > 0;
+    }
+
+    private async void Eye_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+            return;
+        EyePreset preset = sender == EyeCold ? EyePreset.Cold
+            : sender == EyeStandard ? EyePreset.Standard
+            : sender == EyeWarm ? EyePreset.Warm
+            : EyePreset.Off;
+        bool ok = await Task.Run(() => ScreenApi.SetEyeProtect(preset.Blue));
+        Reload(LoadScreen);
+        if (!ok)
+            EyeHint.Text = "Не удалось изменить цвет экрана.";
+    }
+
+    private async void ColorMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || ColorModeBox.SelectedItem is not ColorMode mode)
+            return;
+        bool ok = await Task.Run(() => ScreenApi.SetColorMode(mode));
+        if (!ok)
+            Reload(LoadScreen);
     }
 
     /// <summary>Профиль Honor и пороги зарядки могут сменить и без нас — Fn+P, PC Manager, подключение зарядки. Сверяемся, пока окно открыто.</summary>

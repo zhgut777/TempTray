@@ -76,6 +76,7 @@ public partial class App : Application
             Autostart.RepairIfMoved();
             Autostart.RefreshCached();
             _ = HonorApi.Available;
+            _ = ScreenApi.Available;
         });
         _chargeGuard = new Timer(_ => GuardChargeLimit(), null, 3000, Timeout.Infinite);
         return true;
@@ -119,6 +120,17 @@ public partial class App : Application
                         _chargeLossSeen = false;
                     }
                 }
+            }
+            catch
+            {
+            }
+
+            // Драйвер Intel сбрасывает цветовые таблицы после сна и смены экрана; PC Manager возвращал их сам,
+            // теперь это делаем мы. Проверка у драйвера, а не у прошивки, поэтому процессор не будит.
+            try
+            {
+                if (ScreenApi.Available)
+                    ScreenApi.Reapply();
             }
             catch
             {
@@ -387,7 +399,11 @@ public partial class App : Application
         string restores = journal.Length > 0
             ? $"Восстановление порогов после сброса:{Environment.NewLine}  {string.Join(Environment.NewLine + "  ", journal)}{Environment.NewLine}"
             : "";
-        return $"{Environment.NewLine}Профиль Honor: {state}{error}{Environment.NewLine}{charge}{restores}{logNote}";
+        string screen = !ScreenApi.Available
+            ? $"Экран Honor: драйвер Intel или таблицы цвета недоступны{(ScreenApi.LastError is { } screenError ? $" ({screenError})" : "")}{Environment.NewLine}"
+            : $"Экран Honor: защита зрения {(ScreenApi.GetBlueGain() is double blue ? $"{Math.Round(blue * 100)} % синего" : "нет ответа")}, "
+                + $"режим «{ScreenApi.GetStoredMode()?.Name ?? "?"}», профиль ICC {ScreenApi.GetDefaultIcc() ?? "?"}{Environment.NewLine}";
+        return $"{Environment.NewLine}Профиль Honor: {state}{error}{Environment.NewLine}{charge}{screen}{restores}{logNote}";
     }
 
     public void ExitApp()
