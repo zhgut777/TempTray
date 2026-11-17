@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.Win32;
 
 namespace TempTray;
@@ -677,6 +678,133 @@ internal static unsafe class ScreenApi
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             LastError = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Привязывает к экрану профили всех режимов, чтобы в настройках Windows были видны все они, а не только уже включавшиеся.
+    /// Выбранный профиль при этом остаётся прежним: Windows считает профилем по умолчанию последний в списке,
+    /// поэтому после привязки возвращаем его на место.
+    /// </summary>
+    public static void AssociateAllProfiles()
+    {
+        lock (Sync)
+        {
+            try
+            {
+                if (PrimaryMonitorId() is not { Length: > 0 } device)
+                    return;
+                string? current = GetDefaultIcc();
+                WcsSetUsePerUserProfiles(device, ClassMonitor, true);
+                int added = 0;
+                foreach (ColorMode mode in AvailableModes())
+                {
+                    string file = mode.Icc + ".icc";
+                    if (File.Exists(Path.Combine(ColorDir, file)) && WcsAssociateColorProfileWithDevice(ScopeCurrentUser, file, device))
+                        added++;
+                }
+                if (current != null)
+                    WcsSetDefaultColorProfile(ScopeCurrentUser, device, ProfileTypeIcc, ProfileSubtypeNone, 0, Path.GetFileName(current));
+                using RegistryKey? key = ProfileKeyPath() is { } path ? Registry.CurrentUser.OpenSubKey(path) : null;
+                int total = (key?.GetValue("ICMProfile") as string[])?.Length ?? 0;
+                ChargeLog.Write($"профили режимов привязаны к экрану: {added} из {AvailableModes().Count}, всего у экрана {total}, по умолчанию {GetDefaultIcc() ?? "?"}");
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+            {
+                LastError = ex.Message;
+            }
+        }
+    }
+
+    // ---------- выбор профиля в настройках Windows ----------
+
+    // Раздел, где Windows хранит профили экрана пользователя; нужный подраздел имеет вид {класс монитора}\0002
+    private const string IccAssociationsKey = @"Software\Microsoft\Windows NT\CurrentVersion\ICM\ProfileAssociations\Display";
+    private const uint RegNotifyChangeLastSet = 0x4;
+
+    [DllImport("advapi32.dll")]
+    private static extern int RegNotifyChangeKeyValue(IntPtr key, bool watchSubtree, uint filter, IntPtr eventHandle, bool asynchronous);
+
+    private static readonly ManualResetEvent WatcherStop = new(false);
+    private static Thread? _watcher;
+    private static bool _watchKeyMissingLogged;
+
+    /// <summary>
+    /// Следит за выбором профиля экрана в настройках Windows. Сам профиль цвет не меняет (его меняют таблицы драйвера),
+    /// поэтому, когда профиль режима выбран в Windows, включаем и сам режим — тогда настройки Windows и TempTray согласованы.
+    /// </summary>
+    public static void StartProfileWatcher()
+    {
+        if (_watcher != null)
+            return;
+        WatcherStop.Reset();
+        ChargeLog.Write("слежение за профилем экрана в Windows: запуск");
+        _watcher = new Thread(WatchProfile) { IsBackground = true, Name = "IccWatcher" };
+        _watcher.Start();
+    }
+
+    public static void StopProfileWatcher() => WatcherStop.Set();
+
+    private static string? ProfileKeyPath()
+    {
+        // MONITOR\EDO4179\{4d36e96e-...}\0002 -> {4d36e96e-...}\0002
+        string[]? parts = PrimaryMonitorId()?.Split('\\');
+        return parts is { Length: >= 3 } ? $@"{IccAssociationsKey}\{parts[^2]}\{parts[^1]}" : null;
+    }
+
+    private static void WatchProfile()
+    {
+        while (!WatcherStop.WaitOne(0))
+        {
+            try
+            {
+                using RegistryKey? key = ProfileKeyPath() is { } path ? Registry.CurrentUser.OpenSubKey(path) : null;
+                if (key == null)
+                {
+                    if (!_watchKeyMissingLogged)
+                        ChargeLog.Write($"слежение за профилем экрана: раздела реестра нет ({ProfileKeyPath() ?? "экран не найден"}), жду");
+                    _watchKeyMissingLogged = true;
+                    // Раздела ещё нет (экран ни разу не получал профиль) или экран сменился: смотрим позже
+                    if (WatcherStop.WaitOne(10000))
+                        return;
+                    continue;
+                }
+                _watchKeyMissingLogged = false;
+                using var changed = new ManualResetEvent(false);
+                if (RegNotifyChangeKeyValue(key.Handle.DangerousGetHandle(), false, RegNotifyChangeLastSet, changed.SafeWaitHandle.DangerousGetHandle(), true) != 0)
+                {
+                    if (WatcherStop.WaitOne(10000))
+                        return;
+                    continue;
+                }
+                if (WaitHandle.WaitAny(new WaitHandle[] { changed, WatcherStop }) == 1)
+                    return;
+                // Настройки Windows пишут несколько значений подряд
+                if (WatcherStop.WaitOne(400))
+                    return;
+                OnProfileChanged();
+            }
+            catch (Exception ex)
+            {
+                ChargeLog.Write($"слежение за профилем экрана: ошибка {ex.GetType().Name}: {ex.Message}");
+                if (WatcherStop.WaitOne(10000))
+                    return;
+            }
+        }
+    }
+
+    /// <summary>Профиль экрана сменился: если это профиль одного из режимов и режим другой, включаем его.</summary>
+    private static void OnProfileChanged()
+    {
+        lock (Sync)
+        {
+            string? icc = GetDefaultIcc();
+            ColorMode? mode = icc == null ? null : Modes.FirstOrDefault(m => string.Equals(m.Icc + ".icc", Path.GetFileName(icc), StringComparison.OrdinalIgnoreCase));
+            // Чужой профиль (например, от калибратора) не трогаем; свой же, только что выставленный нами, уже совпадает с режимом
+            if (mode == null || GetStoredMode()?.Index == mode.Index)
+                return;
+            bool done = SetColorMode(mode);
+            ChargeLog.Write($"профиль экрана выбран в Windows: {icc} -> режим «{mode.Name}» {(done ? "включён" : "не удалось включить")}");
         }
     }
 

@@ -77,6 +77,8 @@ public partial class App : Application
             Autostart.RefreshCached();
             _ = HonorApi.Available;
             _ = ScreenApi.Available;
+            ScreenApi.AssociateAllProfiles();
+            ScreenApi.StartProfileWatcher();
         });
         _chargeGuard = new Timer(_ => GuardChargeLimit(), null, 3000, Timeout.Infinite);
         return true;
@@ -421,6 +423,7 @@ public partial class App : Application
     {
         SystemEvents.UserPreferenceChanged -= OnPreferenceChanged;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        ScreenApi.StopProfileWatcher();
         if (_tray != null)
         {
             _tray.Visible = false;
