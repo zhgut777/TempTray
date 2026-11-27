@@ -24,6 +24,7 @@ public partial class App : Application
     private Timer? _chargeGuard;
     private volatile bool _wakeSeen;
     private bool _chargeLossSeen;
+    private int _screenBoost = 6; // сколько ближайших проверок заново записывают цветовые таблицы (после входа и сна)
     private DateTime _lastGuardRun;
     private string _lastGuardState = "";
 
@@ -129,13 +130,22 @@ public partial class App : Application
 
             // Драйвер Intel сбрасывает цветовые таблицы после сна и смены экрана; PC Manager возвращал их сам,
             // теперь это делаем мы. Проверка у драйвера, а не у прошивки, поэтому процессор не будит.
+            // Сразу после входа и пробуждения драйвер ещё поднимает экран и может принять таблицу, но потерять её:
+            // поэтому несколько раз подряд с короткими паузами записываем таблицы заново, не сверяя их с драйвером
+            if (wake)
+                _screenBoost = 4;
+            bool boost = _screenBoost > 0;
             try
             {
-                if (ScreenApi.Available)
-                    ScreenApi.Reapply();
+                ScreenApi.Reapply(force: boost);
             }
             catch
             {
+            }
+            if (boost)
+            {
+                _screenBoost--;
+                pause = Math.Min(pause, 5000);
             }
 
             // Пока шла проверка, компьютер успел уснуть и проснуться: проверяем ещё раз

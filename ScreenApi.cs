@@ -569,19 +569,39 @@ internal static unsafe class ScreenApi
     /// Драйвер сбрасывает таблицы после сна и смены экрана, и сами они не возвращаются
     /// (PC Manager ставит их заново сам). Возвращает выбранные защиту зрения и цветовой режим, если они пропали.
     /// </summary>
-    public static bool Reapply()
+    /// <param name="force">Записать таблицы заново, даже если драйвер отвечает, что они на месте: сразу после входа
+    /// и пробуждения он может ещё не передать их в экран.</param>
+    public static bool Reapply(bool force = false)
     {
         lock (Sync)
         {
             if (!Available)
+            {
+                if (force)
+                    ChargeLog.Write($"экран: драйвер Intel не отвечает ({LastError})");
                 return false;
+            }
             bool changed = false;
 
-            if (GetStoredMode() is { } mode && LoadCalibration(mode.Index) is { } expected && ReadLut3() is { } actual && !SameLut3(expected, actual))
-                changed |= SetColorMode(mode);
+            if (GetStoredMode() is { } mode && LoadCalibration(mode.Index) is { } expected)
+            {
+                double[]? actual = ReadLut3();
+                if (force || actual == null || !SameLut3(expected, actual))
+                {
+                    bool done = SetColorMode(mode);
+                    changed |= done;
+                    if (!force || !done || actual == null || !SameLut3(expected, actual))
+                        ChargeLog.Write($"экран: режим «{mode.Name}» {(done ? "возвращён" : $"не удалось вернуть ({LastError})")}{(actual == null ? ", драйвер не отдал таблицу" : "")}");
+                }
+            }
 
-            if (StoredBlueGain() is double blue && GetBlueGain() is double current && Math.Abs(current - blue) > 0.01)
-                changed |= SetEyeProtect(blue);
+            if (StoredBlueGain() is double blue && (force || GetBlueGain() is not double current || Math.Abs(current - blue) > 0.01))
+            {
+                bool done = SetEyeProtect(blue);
+                changed |= done;
+                if (!done)
+                    ChargeLog.Write($"экран: защиту зрения не удалось вернуть ({LastError})");
+            }
 
             return changed;
         }
